@@ -1,191 +1,169 @@
 #!/usr/bin/python3.6
-#
-#
-# Script desenvolvido por Igor Costa Melo
-# github: igorcmelo <github.com/igorcmelo>
-#
-#
-# Utilização:
-#
-#
-# 1) Instale as dependências
-# - pynput 	(pip3 install pynput)
-#
-# 2) Rode o servidor na máquina que será controlada
-# - por padrão ele roda na porta 1234
-# - em breve adicionarei a opção de alterar a porta
-# - execute: ./rcontrol.py
-#
-# 3) Conecte-se ao computador que será controlado
-# - execute: ./rcontrol.py <ip da máquina>
-# - exemplo: ./rcontrol.py 192.168.1.120
-# 
-# 4) Controle
-# - teclas que você pressionar/soltar serão transmitidas e simulada no outro computador
-# - movimentos, cliques e scrolls do mouse serão transmitidos e simulado no outro computador
-#
-# Observações:
-# - O script foi testado apenas com dois computadores na mesma LAN.
-# - O script NÃO FILTRA os comandos que recebe nem de quem recebe.
-# - Uma pessoa mal intencionada poderia facilmente executar comandos
-# arbitrários e ganhar acesso a sua máquina.
-# - Não é recomendado utilizar numa rede na qual você não confia.
 
-import socket
-import sys
-
-from threading import Thread
-from pynput import mouse as m, keyboard as kb
-from pynput.mouse import Button
+import socket, sys
+from sys import stderr
+from threading import Thread 
+from pynput import keyboard as k, mouse as m
 from pynput.keyboard import Key
+from pynput.mouse import Button
 
 
 def main():
+	port = 1234 # you can change this
 
-	# Se o usuário não passar argumentos ele inicia um servidor na porta 1234
+	# server
 	if len(sys.argv) == 1:
-		port = 1234
-		try:
-			Server.run(port)
+		addr = "0.0.0.0"
+		server = Server(addr, port)
 
-		except KeyboardInterrupt:
-			pass
-
-		except Exception as e:
-			print("Ocorreu um erro:", e)
-
-		print("\nServidor finalizado.")
-
-
-	# Se o usuário passar um argumento, o programa irá interpretá-lo como o endereço do servidor
+	# client
 	elif len(sys.argv) == 2:
-		port = 1234
-		server = sys.argv[1]
-		Client.listen()
-		Client.connect(server, port)
+		addr = sys.argv[1]
+		client = Client(addr, port)
 
-
-	# Se não, mostrará a mensagem de erro
+	# error
 	else:
-		# print()
-		print("Argumentos inválidos.")
 		print()
-		print("Para iniciar o servidor no computador que será controlado:")
-		print("	%s" % (sys.argv[0]))
+		print("[ERROR] Invalid number of args.")
 		print()
-		print("Para se conectar ao servidor e controlar o computador:")
-		print("	%s <ENDEREÇO DO SERVIDOR>" % (sys.argv[0]))
-		print()
-		print()
-		print("Exemplo:")
-		print("  servidor:~$ ./rcontrol.py")
-		print("  cliente:~$ ./rcontrol.py 192.192.168.1.120")
+		usage()
 
 
-class Client():
-	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	escape = False 
+def usage():
+	print("Usage:")
+	print("  (server): %s" % sys.argv[0])
+	print("  (client): %s <server_address>" % sys.argv[0])
+	print()
+	print()
 
-	# Keyboard
-	def press(key):
-		if Client.escape and key != Key.ctrl_r:
-			return
-		msg = "Server.keyboard.press(%s)" % (key)
-		Client.send(msg)
 
-	def release(key):
-		if key == Key.ctrl_r:
-			Client.escape = not Client.escape
-			return
-		msg = "Server.keyboard.release(%s)" % (key)
-		Client.send(msg)
+# The computer that will be controlled
+class Server:
+	def __init__(self, s_addr, port):
+		self.max_cons = 1 # you can change this (I never tried with more than 1 client)
 
-	# Mouse
-	def move(x, y):
-		if Client.escape:
-			return
-		msg = "Server.mouse.position = (%s, %s)" % (x, y)
-		Client.send(msg)
+		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		self.sock.bind((s_addr, port))
+		self.sock.listen(self.max_cons)
 
-	def click(x, y, button, pressed):
-		if Client.escape:
-			return
-		action = "press" if pressed else "release"
-		msg = "Server.mouse.%s(%s)" % (action, button)
-		Client.send(msg)
+		print("[INFO] Server is up.")
 
-	def scroll(x, y, dx, dy):
-		if Client.escape:
-			return
-		msg = "Server.mouse.scroll(0, %s)" % (dy)
-		Client.send(msg)
+		keyboard = k.Controller()
+		mouse = m.Controller()
 
-	# Handlers
-	def handle_kb():
-		with kb.Listener(
-			on_press = Client.press, 
-			on_release = Client.release) as l:
-			l.join()
-
-	def handle_mouse():
-		with m.Listener(
-			on_move = Client.move, 
-			on_click = Client.click, 
-			on_scroll = Client.scroll) as l:
-			l.join()
-
-	def listen():
-		t1 = Thread(target = Client.handle_kb)
-		t1.daemon = True 
-		t1.start()
-		t2 = Thread(target = Client.handle_mouse)
-		t2.daemon = True 
-		t2.start()
-
-	def connect(server, port):
-		Client.sock.connect((server, port))
-		print("Conectado.")
-		Client.sock.recv(1024)
-
-	def send(msg):
-		print("%s" % (msg))
-		Client.sock.send(msg.encode('utf-8'))
-
-class Server():
-	mouse = m.Controller()
-	keyboard = kb.Controller()
-
-	def run(port):
-		s_addr = "0.0.0.0"
-		max_conns = 2
-		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		sock.bind((s_addr, port))
-		sock.listen(max_conns)
-
-		print("Servidor iniciado.")
-	
+		# keep accepting clients
 		while True:
-			conn, addr = sock.accept()
-			print("%s:%s se conectou." % (addr[0], addr[1]))
+			conn, c_addr = self.sock.accept()
+			c_ip = c_addr[0]
+			c_port = c_addr[1]
+			print("[INFO] %s:%s connected." % (c_ip, c_port))
 
+
+			# receive the commands
 			while True:
 				data = conn.recv(1024)
 				if not data:
 					conn.close()
-					print("%s:%s se desconectou." % (addr[0], addr[1]))
+					print("[INFO] %s:%s disconnected." % (c_ip, c_port))
 					break
 
-				print("%s" % (data.decode('utf-8')))
+				cmd = data.decode('utf-8')
+				print(cmd)
 
 				try:
-				 	Server.execute(data.decode())
+					exec(cmd) # THIS IS DANGEROUS! BE CAREFUL!
 
 				except Exception as e:
-				 	print(e)
+					stderr.write("[ERROR] " + str(e))
 
-	def execute(msg):
-		exec(msg)
+
+# The computer that will control another computer
+class Client:
+	def __init__(self, addr, port, escapekey = Key.ctrl_r):
+		self.escape = False
+		self.escapekey = escapekey
+		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.sock.connect((addr, port))
+
+		th_keyboard = Thread(target = self.listen_keyboard)
+		th_keyboard.daemon = True
+		th_keyboard.start()
+
+		th_mouse = Thread(target = self.listen_mouse)
+		th_mouse.start()
+
+
+	# ------- KEYBOARD EVENTS ------- #
+	def press(self, key):
+		msg = "keyboard.press(%s)" % (key)
+
+		if self.escape: 
+			print("[IGNORING] " + msg)
+			return
+
+		self.send(msg)
+
+	def release(self, key):
+		if key == self.escapekey: 
+			self.escape = not self.escape
+			return 
+
+		msg = "keyboard.release(%s)" % (key)
+
+		if self.escape: 
+			print("[IGNORING] " + msg)
+			return
+
+		self.send(msg)
+
+
+	# ------- MOUSE EVENTS ------- #
+	def move(self, x, y):
+		msg = "mouse.position = (%s, %s)" % (x, y)
+		if self.escape: 
+			print("[IGNORING] " + msg)
+			return
+
+		self.send(msg)
+
+	def click(self, x, y, button, pressed):
+		msg = "mouse.click(%s)" % (button)
+		if self.escape: 
+			print("[IGNORING] " + msg)
+			return
+
+		self.send(msg)	
+
+	def scroll(self, x, y, dx, dy):
+		msg = "mouse.scroll(%s, %s)" % (dx, dy)
+		if self.escape: 
+			print("[IGNORING] " + msg)
+			return
+
+		self.send(msg)	
+
+
+	# ------- EVENT LISTENERS ------- #
+	def listen_mouse(self):
+		with m.Listener(
+				on_move = self.move, 
+				on_click = self.click, 
+				on_scroll = self.scroll) as l:
+			l.join()
+
+	def listen_keyboard(self):
+		with k.Listener(
+				on_press = self.press, 
+				on_release = self.release
+		) as l:
+			l.join()
+
+
+	# ------- SEND MESSAGES THROUGH SOCKET ------- #
+	def send(self, msg):
+		print(msg)
+		self.sock.send(msg.encode('utf-8'))
 
 
 if __name__ == '__main__':

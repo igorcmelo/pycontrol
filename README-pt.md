@@ -6,7 +6,7 @@ Script simples em python para controlar o mouse e teclado de outro computador, r
 
 ## Pré-requisitos
 1. [Python 3.x](https://www.python.org/downloads/).
-2. ["Instalador de Pacotes para Python" (pip)](https://pypi.org/project/pip/), para instalar o pynput.
+2. [Instalador de pacotes para Python (pip)](https://pypi.org/project/pip/), para instalar o pynput.
 3. [biblioteca pynput](https://pypi.org/project/pynput/), para 'escutar' e controlar o input do teclado e mouse.
 
 ## Atenção

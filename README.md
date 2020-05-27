@@ -1,4 +1,5 @@
 # PyControl
+README Languages: [PT](README-pt.md) | [EN](README.md)
 Simple python script to control another computer's keyboard and mouse through network
 
 ## Prerequisites
